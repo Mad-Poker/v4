@@ -1,0 +1,624 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>БЕЗУМНЫЙ ПОКЕР — игра, которая сломала стол</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Bangers&family=Creepster&family=Rubik+Glitch&family=Rubik+Pixels&family=Rubik+Mono+One&family=VT323&display=swap');
+
+* { margin: 0; padding: 0; box-sizing: border-box; user-select: none; -webkit-tap-highlight-color: transparent; }
+
+:root {
+  --bg1: #0a0a0a; --bg2: #120518; --bg3: #1f0a2f;
+  --neon-cyan: #00f8ff; --neon-pink: #ff0099; --neon-lime: #ccff00;
+  --neon-amber: #ffaa00; --neon-violet: #aa00ff;
+}
+
+html, body { height: 100%; overflow: hidden; background: #050505; color: #fff; font-family: system-ui, sans-serif; }
+
+canvas { display: block; }
+
+/* CRT scanline overlay */
+.scanline {
+  position: fixed; inset: 0; pointer-events: none; z-index: 9999;
+  background: repeating-linear-gradient(
+    0deg, rgba(0,0,0,0.15) 0px, rgba(0,0,0,0.15) 1px, transparent 2px, transparent 4px
+  ); animation: scanMove 4s linear infinite;
+}
+@keyframes scanMove { from { background-position: 0 0; } to { background-position: 0 8px; } }
+
+/* Glitch title */
+.glitch-container { position: fixed; top: 25px; left: 50%; transform: translateX(-50%); text-align: center; z-index: 10; pointer-events: none; width: 100%; }
+.glitch-title {
+  font-family: 'Creepster', cursive; font-size: clamp(2.5rem, 8vw, 5rem);
+  letter-spacing: -0.04em; line-height: 0.85; white-space: nowrap;
+  color: #fff; text-shadow: 3px 3px 0 #ff0099, -3px -3px 0 #00f8ff, 6px 6px 0 #ccff00;
+  animation: glitchShift 2.8s infinite steps(6);
+  pointer-events: auto; cursor: pointer;
+}
+.glitch-sub {
+  font-family: 'Rubik Glitch', cursive; font-size: 1.1rem; color: var(--neon-amber);
+  margin-top: 8px; letter-spacing: 0.2em; text-transform: uppercase;
+  animation: glitchShift 3.2s infinite steps(4) reverse;
+}
+@keyframes glitchShift {
+  0%, 85%, 100% { transform: translate(0,0); }
+  10% { transform: translate(-4px, 3px); }
+  20% { transform: translate(4px, -2px); }
+  35% { transform: translate(-2px, -3px); filter: hue-rotate(45deg); }
+  50% { transform: translate(3px, 4px); filter: hue-rotate(-45deg); }
+  65% { transform: translate(-3px, 2px); }
+  75% { transform: translate(2px, -4px); }
+}
+
+/* HUD overlay */
+.hud {
+  position: fixed; top: 0; left: 0; right: 0; z-index: 200;
+  display: flex; justify-content: space-between; align-items: flex-start;
+  padding: 16px 24px; pointer-events: none; flex-wrap: wrap; gap: 10px;
+}
+.hud .panel {
+  background: rgba(0,0,0,0.5); border: 2px solid var(--neon-cyan);
+  border-radius: 16px; padding: 8px 16px; backdrop-filter: blur(6px);
+  pointer-events: auto; box-shadow: 0 0 20px rgba(0,248,255,0.2), inset 0 0 30px rgba(255,0,153,0.1);
+}
+.hud h3 { font-family: 'Rubik Mono One', serif; font-size: 0.75rem; color: var(--neon-amber); letter-spacing: 0.1em; margin-bottom: 4px; }
+.hud .stat { font-family: 'Rubik Glitch', cursive; font-size: 1.3rem; color: var(--neon-cyan); }
+
+/* Bottom control bar */
+.controls-bar {
+  position: fixed; bottom: 0; left: 0; right: 0; z-index: 150;
+  display: flex; justify-content: center; gap: 12px;
+  padding: 14px 20px; pointer-events: auto;
+  background: linear-gradient(0deg, rgba(5,5,5,0.95) 0%, rgba(5,5,5,0.6) 80%, transparent);
+  flex-wrap: wrap;
+}
+.btn {
+  border: 2px solid var(--neon-pink); color: var(--neon-pink);
+  background: rgba(255,0,153,0.05); padding: 12px 24px; border-radius: 50px;
+  font-family: 'Rubik Glitch', cursive; font-size: 1rem; letter-spacing: 0.1em;
+  cursor: pointer; transition: all 0.15s; text-transform: uppercase;
+  box-shadow: 0 0 15px rgba(255,0,153,0.2);
+  pointer-events: auto;
+}
+.btn:hover { background: var(--neon-pink); color: #000; box-shadow: 0 0 30px var(--neon-pink); }
+.btn:active { transform: scale(0.97); }
+.btn.btn-chaos { border-color: var(--neon-amber); color: var(--neon-amber); font-family: 'Bangers', cursive; font-size: 1.3rem; letter-spacing: 2px; }
+.btn.btn-chaos:hover { background: var(--neon-amber); color: #000; box-shadow: 0 0 30px var(--neon-amber); }
+.btn.btn-fold { border-color: var(--neon-violet); color: var(--neon-violet); }
+.btn.btn-fold:hover { background: var(--neon-violet); color: #000; box-shadow: 0 0 30px var(--neon-violet); }
+
+/* Fly away animation for Fold button */
+@keyframes flyAway {
+  0% { transform: translateY(0) rotate(0) scale(1); opacity: 1; }
+  100% { transform: translateY(-100vh) rotate(1080deg) scale(0.1); opacity: 0; }
+}
+.fly-away { animation: flyAway 1.5s cubic-bezier(0.55, 0.085, 0.68, 0.53) forwards; pointer-events: none; }
+
+/* Speech bubbles from bots */
+.bubble {
+  position: fixed; z-index: 300; pointer-events: none;
+  background: rgba(255,255,255,0.92); color: #000;
+  padding: 14px 20px; border-radius: 24px 24px 24px 4px;
+  font-family: 'Bangers', cursive; font-size: 1.3rem; letter-spacing: 0.02em;
+  box-shadow: 4px 4px 0 #ff0099, 8px 8px 0 #00f8ff;
+  max-width: 340px; animation: bubblePop 0.3s ease-out;
+  border: 3px solid #000;
+}
+@keyframes bubblePop {
+  from { opacity: 0; transform: scale(0.5) rotate(-3deg); }
+  60% { transform: scale(1.08) rotate(2deg); }
+  to { opacity: 1; transform: scale(1) rotate(0); }
+}
+.bubble::after {
+  content: ''; position: absolute; bottom: -14px; left: 24px;
+  width: 20px; height: 20px; background: rgba(255,255,255,0.92);
+  border-left: 3px solid #000; border-bottom: 3px solid #000;
+  transform: rotate(-45deg);
+}
+.bubble-fade { animation: bubbleFade 4.5s ease-out forwards; }
+@keyframes bubbleFade { to { opacity: 0; transform: translateY(-20px); } }
+
+/* Seats */
+.seat-zone { position: fixed; z-index: 20; pointer-events: none; }
+.seat-zone.bot-left { bottom: 200px; left: 20px; }
+.seat-zone.bot-right { bottom: 200px; right: 20px; }
+.seat-label {
+  background: linear-gradient(135deg, rgba(255,0,153,0.2), rgba(0,248,255,0.2));
+  border: 2px solid var(--neon-cyan); border-radius: 16px; padding: 6px 16px;
+  font-family: 'Rubik Glitch', cursive; font-size: 0.9rem;
+  color: var(--neon-lime); text-shadow: 0 0 8px var(--neon-lime);
+  backdrop-filter: blur(4px);
+}
+
+/* ================= ЭФФЕКТЫ ХАОСА ================= */
+.effect-shake { animation: shake 0.5s cubic-bezier(.36,.07,.19,.97) both; }
+@keyframes shake {
+  10%, 90% { transform: translate3d(-2px, 0, 0); }
+  20%, 80% { transform: translate3d(4px, 0, 0); }
+  30%, 50%, 70% { transform: translate3d(-6px, 0, 0); }
+  40%, 60% { transform: translate3d(6px, 0, 0); }
+}
+.effect-invert { filter: invert(1) hue-rotate(180deg); transition: filter 0.2s; }
+.effect-glitch { animation: glitchSlice 0.4s linear infinite; }
+@keyframes glitchSlice {
+  0% { clip-path: inset(10% 0 80% 0); transform: translateX(-5px); }
+  20% { clip-path: inset(80% 0 5% 0); transform: translateX(5px); }
+  40% { clip-path: inset(30% 0 50% 0); transform: translateX(-2px); }
+  60% { clip-path: inset(60% 0 20% 0); transform: translateX(2px); }
+  80% { clip-path: inset(10% 0 70% 0); transform: translateX(-1px); }
+  100% { clip-path: inset(50% 0 30% 0); transform: translateX(1px); }
+}
+#flash-overlay { position: fixed; inset: 0; pointer-events: none; z-index: 9998; opacity: 0; }
+.effect-flash-active { animation: flashActive 0.4s ease-out forwards; }
+@keyframes flashActive { 0% { background: #fff; opacity: 1; } 100% { background: #fff; opacity: 0; } }
+
+/* Mobile Adaptation */
+@media (max-width: 768px) {
+  .hud { padding: 8px 4px; gap: 4px; justify-content: center; align-items: center; }
+  .hud .panel { padding: 4px 10px; border-radius: 10px; }
+  .hud h3 { display: none; }
+  .hud .stat { font-size: 0.9rem; }
+
+  .glitch-container { top: 60px; }
+  .glitch-title { font-size: 1.8rem; }
+  .glitch-sub { font-size: 0.65rem; letter-spacing: 1px; margin-top: 2px; }
+
+  .btn { padding: 10px 16px; font-size: 0.85rem; }
+  .btn.btn-chaos { font-size: 1rem; }
+  .seat-zone { display: none; } 
+  .bubble { font-size: 1rem; padding: 10px 14px; max-width: 250px; }
+}
+</style>
+</head>
+<body>
+
+<div id="flash-overlay"></div>
+<div class="scanline"></div>
+
+<div class="glitch-container">
+  <h1 class="glitch-title" onclick="triggerChaos()">БЕЗУМНЫЙ ПОКЕР</h1>
+  <p class="glitch-sub">стол сломан · карты живые · мозги в кашу</p>
+</div>
+
+<div class="hud">
+  <div class="panel">
+    <h3>ТВОИ ФИШКИ</h3>
+    <div class="stat" id="stat-chips">💰 1000</div>
+  </div>
+  <div class="panel">
+    <h3>БАНК / ХАОС</h3>
+    <div class="stat" id="stat-pot">🏦 0</div>
+  </div>
+  <div class="panel">
+    <h3>ФАЗА</h3>
+    <div class="stat" id="stat-phase">ЖДИ</div>
+  </div>
+</div>
+
+<div class="seat-zone bot-left"><div class="seat-label">БОТ <span style="color:var(--neon-pink)">«ПЛАЗМА»</span></div></div>
+<div class="seat-zone bot-right"><div class="seat-label">БОТ <span style="color:var(--neon-amber)">«КАРТОШКА»</span></div></div>
+
+<div class="controls-bar" id="controls">
+  <button class="btn" onclick="playerAction('call')">ПОДДЕРЖАТЬ</button>
+  <button class="btn" onclick="playerAction('raise')">ПОДНЯТЬ</button>
+  <button class="btn btn-chaos" onclick="triggerChaos()">混乱</button>
+  <button class="btn btn-fold" id="foldBtn" onclick="triggerFold()">СДАТЬСЯ</button>
+</div>
+
+<canvas id="tableCanvas"></canvas>
+
+<script>
+/* ============================================================
+   БЕЗУМНЫЙ ПОКЕР — МАКСИМАЛЬНЫЙ ХАОС (ЗВУК ИЗ ОРИГИНАЛА)
+   ============================================================ */
+
+const canvas = document.getElementById('tableCanvas');
+const ctx = canvas.getContext('2d');
+
+let W, H;
+function resize() {
+  W = window.innerWidth; H = window.innerHeight;
+  canvas.width = W; canvas.height = H;
+}
+window.addEventListener('resize', resize);
+resize();
+
+/* ========================= AUDIO ENGINE (БЕЗ ИЗМЕНЕНИЙ) ========================= */
+const AudioCtx = window.AudioContext || window.webkitAudioContext;
+const audioCtx = new AudioCtx();
+
+function tone(freq, duration, type='triangle', vol=0.1, pan=0, dist=0.05) {
+  try {
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    const panNode = audioCtx.createStereoPanner ? audioCtx.createStereoPanner(pan) : null;
+    osc.type = type; osc.frequency.value = freq;
+    osc.connect(gain);
+    if (panNode) { gain.connect(panNode); panNode.connect(audioCtx.destination); } else { gain.connect(audioCtx.destination); }
+    gain.gain.setValueAtTime(vol, audioCtx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + duration);
+    osc.start(); osc.stop(audioCtx.currentTime + duration);
+  } catch(e) {}
+}
+
+function playChaosSound() {
+  const freqs = [220, 330, 440, 880, 110];
+  freqs.forEach((f, i) => {
+    setTimeout(() => tone(f + (Math.random()-0.5)*200, 0.3 + Math.random()*0.5, Math.random()>0.5?'sawtooth':'triangle', 0.05 + Math.random()*0.05, (Math.random()-0.5)*0.8), i*60);
+  });
+}
+
+function playCardSound() {
+  tone(600 + Math.random()*800, 0.15, 'sine', 0.08, (Math.random()-0.5)*0.3);
+}
+
+/* ========================= GAME STATE & DATA ========================= */
+let chips = 1000;
+let pot = 0;
+let phase = 0;
+let phaseNames = ["ОЖИДАНИЕ", "ПРЕФЛОП", "ФЛОП", "ТЁРН", "РИВЕР", "ВСКРЫТИЕ"];
+let phaseTimeout = null;
+
+const suits = ['💀', '🔥', '🧠', '🍕', '👁', '🕳'];
+const values = ['?','X', '∞', 'NOPE', 'LOL', 'GLITCH', '¡', 'Ø'];
+
+function randomCard() {
+  return {
+    suit: suits[Math.floor(Math.random() * suits.length)],
+    value: values[Math.floor(Math.random() * values.length)],
+    chaos: Math.random() > 0.7 ? true : false,
+    angle: (Math.random() - 0.5) * 25,
+    yOffset: Math.random() * 30 - 15,
+    glow: Math.random() > 0.8 ? ['#ff0099', '#00f8ff', '#ccff00'][Math.floor(Math.random()*3)] : null
+  };
+}
+
+let playerCards = [];
+let botCards = [[], []];
+let communityCards = [];
+
+const botNames = ['ПЛАЗМА', 'КАРТОШКА'];
+const botQuotes = [
+  "Я — НЕ КАРТА. Я — КАРТИНА.",
+  "КАРТОШКА НЕ СЛОМАЕТСЯ. ОНА УЖЕ СЛОМАНА.",
+  "МОЯ КАРТА СЪЕЛА МЕНЯ ВЧЕРА.",
+  "ТВОЙ МОЗГ — ЭТО МОЙ МОЗГ.",
+  "ПРАВИЛА? КАКИЕ ПРАВИЛА?",
+  "СТАВКА? ЭТО ПРОСТО ЧИСЛО. КАК ЖИЗНЬ.",
+  "МОЙ ХОД — ЭТО ТВОЙ КОШМАР.",
+  "ХАОС — ЭТО НЕ СОБЫТИЕ. ЭТО СОСТОЯНИЕ ДУШИ.",
+  "ТЫ НЕ ИГРОК. ТЫ — ОШИБКА В КОДЕ.",
+  "Я СТАВЛЮ НА ПУСТОТУ.",
+  "Я помню траву. Она была зелёной. А теперь тут только неон.",
+  "Судьба — это просто плохо перемешанная колода. И мы в ней мусор.",
+  "Мы играем в игру, где нет победителей. Только те, кто еще не проиграл.",
+  "Кто-нибудь видел смысл в моей руке? Я потерял его на прошлом ходу.",
+  "Банк растет, а пустота внутри — нет. Странно.",
+  "Я блефую не картами, а своей жизнью. И это срабатывает.",
+  "Вы верите в судьбу? Я — нет. Я верю в d20.",
+  "Когда-то я был человеком. Потом я увидел эту игру.",
+  "Не грусти, когда проиграешь. Мы все просто строчки в чужом коде.",
+  "Мои карты пахнут одиночеством и старым ковром.",
+  "Я бы поставил всё, но у меня нет души. Только фишки.",
+  "Интересно, а дилер вообще существует? Или это просто шум?"
+];
+
+/* ========================= ВИЗУАЛЬНЫЕ ЭФФЕКТЫ (7 ШТУК) ========================= */
+let canvasEffects = [];
+
+const visualEffects = [
+  () => {
+    document.body.classList.add('effect-shake');
+    setTimeout(() => document.body.classList.remove('effect-shake'), 500);
+    for(let i=0; i<10; i++) setTimeout(() => tone(100 + Math.random()*200, 0.1, 'sawtooth', 0.1), i*30);
+  },
+  () => {
+    canvas.classList.add('effect-invert');
+    setTimeout(() => canvas.classList.remove('effect-invert'), 1000);
+    tone(880, 1, 'square', 0.1); tone(440, 1, 'sawtooth', 0.1);
+  },
+  () => {
+    canvas.classList.add('effect-glitch');
+    setTimeout(() => canvas.classList.remove('effect-glitch'), 800);
+    for(let i=0; i<20; i++) setTimeout(() => tone(Math.random()*2000, 0.05, 'square', 0.05), i*40);
+  },
+  () => {
+    for (let i=0; i<50; i++) {
+      canvasEffects.push({
+        type: 'matrix', x: Math.random() * W, y: Math.random() * -H,
+        speed: 5 + Math.random() * 15, text: Math.random() > 0.5 ? '1' : '0', color: '#00ff00'
+      });
+    }
+    for(let i=0; i<5; i++) setTimeout(() => tone(200 + Math.random()*400, 0.2, 'sine', 0.05), i*100);
+  },
+  () => {
+    const flash = document.getElementById('flash-overlay');
+    flash.classList.add('effect-flash-active');
+    setTimeout(() => flash.classList.remove('effect-flash-active'), 400);
+    try {
+      const osc = audioCtx.createOscillator(), gain = audioCtx.createGain();
+      osc.type = 'sine'; osc.frequency.setValueAtTime(150, audioCtx.currentTime);
+      osc.frequency.exponentialRampToValueAtTime(30, audioCtx.currentTime + 0.5);
+      gain.gain.setValueAtTime(0.3, audioCtx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.5);
+      osc.connect(gain); gain.connect(audioCtx.destination);
+      osc.start(); osc.stop(audioCtx.currentTime + 0.5);
+    } catch(e) {}
+  },
+  () => {
+    for (let i=0; i<3; i++) {
+      canvasEffects.push({
+        type: 'pulse', x: W/2, y: H/2, r: 10, maxR: W, speed: 10 + i*5,
+        color: i%2===0 ? '#ff0099' : '#00f8ff'
+      });
+    }
+    tone(300, 0.5, 'triangle', 0.1, 0); setTimeout(() => tone(400, 0.5, 'triangle', 0.1, 0), 150);
+  },
+  () => {
+    canvas.style.transform = `skewX(${Math.random()*20-10}deg) scale(1.05)`;
+    canvas.style.transition = 'transform 0.1s';
+    setTimeout(() => { canvas.style.transform = 'none'; }, 300);
+    [400, 600, 800].forEach((f,i) => setTimeout(() => tone(f, 0.3, 'square', 0.05, 0), i*80));
+  }
+];
+
+/* ========================= DRAWING ========================= */
+function drawTable() {
+  const isMobile = W < 768;
+  const cardScale = isMobile ? 0.65 : 1;
+  const spacing = 120 * cardScale;
+
+  const grad = ctx.createRadialGradient(W/2, H/2, 0, W/2, H/2, W*0.8);
+  grad.addColorStop(0, '#1f0a2f'); grad.addColorStop(0.4, '#120518'); grad.addColorStop(1, '#050505');
+  ctx.fillStyle = grad; ctx.fillRect(0, 0, W, H);
+
+  const spots = 6;
+  for (let i = 0; i < spots; i++) {
+    const angle = (i / spots) * Math.PI * 2;
+    const r = Math.min(W, H) * 0.32;
+    const cx = W/2 + Math.cos(angle) * r;
+    const cy = H/2 + Math.sin(angle) * r;
+    const glow = ctx.createRadialGradient(cx, cy, 0, cx, cy, 80 * cardScale);
+    glow.addColorStop(0, 'rgba(255,0,153,0.15)');
+    glow.addColorStop(0.5, 'rgba(0,248,255,0.1)');
+    glow.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = glow; ctx.fillRect(cx-80, cy-80, 160, 160);
+  }
+
+  const potGlow = ctx.createRadialGradient(W/2, H/2, 0, W/2, H/2, 200);
+  potGlow.addColorStop(0, 'rgba(255,255,255,0.05)');
+  potGlow.addColorStop(0.5, 'rgba(255,0,153,0.08)');
+  potGlow.addColorStop(1, 'rgba(0,248,255,0.03)');
+  ctx.fillStyle = potGlow;
+  ctx.beginPath(); ctx.arc(W/2, H/2, 150, 0, Math.PI*2); ctx.fill();
+
+  ctx.font = `bold ${isMobile ? '1.5rem' : '2.5rem'} Rubik Glitch, cursive`;
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillStyle = '#fff'; ctx.shadowColor = '#ff0099'; ctx.shadowBlur = 20;
+  ctx.fillText(`🏦 ${pot}`, W/2, H/2 - 10);
+  ctx.font = `${isMobile ? '0.8rem' : '1rem'} Bangers, cursive`;
+  ctx.fillStyle = '#ccff00'; ctx.shadowBlur = 10;
+  ctx.fillText('БАНК ЖИВ. ТЫ — ТОЖЕ?', W/2, H/2 + (isMobile ? 20 : 30));
+  ctx.shadowBlur = 0;
+
+  drawCards(W/2 - (220 * cardScale), H/2 - (60 * cardScale), communityCards, 'БОРД', cardScale);
+  
+  const playerY = H - (isMobile ? 200 : 280);
+  drawCards(W/2 - (180 * cardScale), playerY, playerCards, 'ТВОИ', cardScale);
+  
+  const botY = isMobile ? 140 : 160;
+  drawCards(W*0.15 - (50 * cardScale), botY, botCards[0], botNames[0], cardScale);
+  drawCards(W*0.85 - (170 * cardScale), botY, botCards[1], botNames[1], cardScale);
+
+  for (let i = canvasEffects.length - 1; i >= 0; i--) {
+    const fx = canvasEffects[i];
+    if (fx.type === 'matrix') {
+      ctx.font = '20px VT323, monospace'; ctx.fillStyle = fx.color;
+      ctx.fillText(fx.text, fx.x, fx.y);
+      fx.y += fx.speed;
+      if (fx.y > H) { fx.y = -20; fx.x = Math.random() * W; }
+      if (Math.random() > 0.9) fx.text = String(Math.floor(Math.random()*10));
+    } else if (fx.type === 'pulse') {
+      ctx.beginPath(); ctx.arc(fx.x, fx.y, fx.r, 0, Math.PI*2);
+      ctx.strokeStyle = fx.color; ctx.lineWidth = 4;
+      ctx.globalAlpha = Math.max(0, 1 - (fx.r / fx.maxR));
+      ctx.stroke(); ctx.globalAlpha = 1;
+      fx.r += fx.speed;
+      if (fx.r > fx.maxR) canvasEffects.splice(i, 1);
+    }
+  }
+}
+
+function drawCards(x, y, cardArr, label, scale = 1) {
+  const spacing = 120 * scale;
+  cardArr.forEach((card, i) => {
+    const cx = x + i * spacing;
+    const cy = y + (card.yOffset * scale);
+    ctx.save();
+    ctx.translate(cx + (50 * scale), cy + (70 * scale));
+    ctx.rotate((card.angle * Math.PI) / 180);
+    ctx.scale(scale, scale);
+
+    if (card.glow) { ctx.shadowColor = card.glow; ctx.shadowBlur = 30; } else { ctx.shadowColor = '#ff0099'; ctx.shadowBlur = 8; }
+
+    const grad = ctx.createLinearGradient(-50, -70, 50, 70);
+    grad.addColorStop(0, '#1a0a1a'); grad.addColorStop(1, '#2a0a2a');
+    ctx.fillStyle = grad; ctx.fillRect(-60, -80, 120, 160);
+
+    ctx.strokeStyle = card.chaos ? '#ff0099' : '#00f8ff';
+    ctx.lineWidth = card.chaos ? 4 : 2;
+    ctx.strokeRect(-58, -78, 116, 156);
+
+    ctx.font = '1.2rem system-ui'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillStyle = card.chaos ? '#ff0099' : '#ccff00';
+    ctx.fillText(card.suit, -45, -55); ctx.fillText(card.suit, 45, 55);
+
+    ctx.font = `bold 2.5rem ${card.chaos ? 'Creepster, cursive' : 'Rubik Glitch, cursive'}`;
+    ctx.fillStyle = card.chaos ? '#ff0099' : '#fff';
+    ctx.shadowColor = card.glow || '#00f8ff'; ctx.shadowBlur = 15;
+    ctx.fillText(card.value, 0, 15);
+    ctx.shadowBlur = 0;
+
+    if (card.chaos) {
+      ctx.fillStyle = '#ff0099'; ctx.font = 'bold 0.7rem Rubik Glitch, cursive';
+      ctx.fillText('CHAOS', 0, 55);
+    }
+    ctx.restore();
+  });
+
+  if (label && cardArr.length > 0) {
+    ctx.font = `bold ${0.9 * scale}rem Rubik Glitch, cursive`;
+    ctx.fillStyle = '#aa00ff'; ctx.textAlign = 'center';
+    ctx.shadowColor = '#aa00ff'; ctx.shadowBlur = 8;
+    ctx.fillText(label, x + (cardArr.length * spacing) / 2, y - (20 * scale));
+    ctx.shadowBlur = 0;
+  }
+}
+
+/* ========================= BUBBLES ========================= */
+function spawnBubble(text, xPos, yPos) {
+  const bubble = document.createElement('div');
+  bubble.className = 'bubble bubble-fade';
+  bubble.textContent = text;
+  bubble.style.left = Math.max(20, Math.min(xPos, W - 320)) + 'px';
+  bubble.style.top = Math.max(120, Math.min(yPos - 80, H - 200)) + 'px';
+  document.body.appendChild(bubble);
+  setTimeout(() => bubble.remove(), 4500);
+  playChaosSound();
+}
+
+/* ========================= GAME LOGIC ========================= */
+function updateHUD() {
+  document.getElementById('stat-chips').textContent = `💰 ${chips}`;
+  document.getElementById('stat-pot').textContent = `🏦 ${pot}`;
+  document.getElementById('stat-phase').textContent = phaseNames[phase] || "СЛОМАНО";
+}
+
+function startRound() {
+  phase = 1; 
+  chips -= 50; pot += 50;
+  playerCards = [randomCard(), randomCard()];
+  botCards = [[randomCard(), randomCard()], [randomCard(), randomCard()]];
+  communityCards = [];
+  
+  updateHUD();
+  playCardSound();
+  spawnBubble("ПРЕФЛОП. СТАВКИ СДЕЛАНЫ. НАЧИНАЕМ.", W*0.2, 200);
+
+  clearTimeout(phaseTimeout);
+  phaseTimeout = setTimeout(advancePhase, 3000);
+}
+
+function playerAction(action) {
+  if (audioCtx.state === 'suspended') audioCtx.resume();
+  
+  if (action === 'raise') {
+    chips -= 100; pot += 100;
+    spawnBubble("ТЫ ПОДНИМАЕШЬ. СТОЛ СМЕЕТСЯ.", W/2, H*0.6);
+  } else if (action === 'call') {
+    chips -= 50; pot += 50;
+    spawnBubble("ТЫ ПОДДЕРЖИВАЕШЬ. ЭТО МУДРО. НАВЕРНОЕ.", W/2, H*0.6);
+  }
+
+  setTimeout(() => {
+    const quote = botQuotes[Math.floor(Math.random() * botQuotes.length)];
+    spawnBubble(quote, Math.random() > 0.5 ? W*0.15 : W*0.75, 200 + Math.random()*100);
+  }, 600);
+
+  updateHUD();
+}
+
+function advancePhase() {
+  phase++;
+  if (phase === 2) {
+    communityCards = [randomCard(), randomCard(), randomCard()];
+    spawnBubble("ФЛОП. ТРИ КАРТЫ ИЗ НИОТКУДА.", W/2, H/2);
+    playChaosSound();
+  } else if (phase === 3) {
+    communityCards.push(randomCard());
+    spawnBubble("ТЁРН. СТАНОВИТСЯ СТРАШНО.", W/2, H/2);
+    playCardSound();
+  } else if (phase === 4) {
+    communityCards.push(randomCard());
+    spawnBubble("РИВЕР. ПОСЛЕДНИЙ ШАНС.", W/2, H/2);
+    playCardSound();
+  } else if (phase >= 5) {
+    spawnBubble("ВСКРЫТИЕ. ПОБЕДИТЕЛЬ — ТОТ, КТО ВЫЖИЛ.", W/2, H/2);
+    playChaosSound();
+    phase = 5;
+    
+    clearTimeout(phaseTimeout);
+    phaseTimeout = setTimeout(() => {
+      communityCards = [];
+      playerCards = [];
+      botCards = [[],[]];
+      phase = 0;
+      updateHUD();
+      startRound(); 
+    }, 4000);
+    return;
+  }
+  
+  updateHUD();
+  if (phase < 5) {
+    clearTimeout(phaseTimeout);
+    phaseTimeout = setTimeout(advancePhase, 4000);
+  }
+}
+
+function triggerFold() {
+  if (audioCtx.state === 'suspended') audioCtx.resume();
+  
+  const foldBtn = document.getElementById('foldBtn');
+  foldBtn.classList.add('fly-away');
+  spawnBubble("ТЫ СБЕЖАЛ. НО СТОЛ ОСТАЛСЯ.", W/2, H*0.6);
+  playChaosSound();
+  
+  clearTimeout(phaseTimeout);
+  setTimeout(() => {
+    foldBtn.style.display = 'none';
+    communityCards = [];
+    playerCards = [];
+    botCards = [[],[]];
+    phase = 0;
+    updateHUD();
+    startRound(); 
+  }, 1500);
+}
+
+/* ========================= CHAOS EVENTS ========================= */
+function triggerChaos() {
+  if (audioCtx.state === 'suspended') audioCtx.resume();
+  
+  const effect = visualEffects[Math.floor(Math.random() * visualEffects.length)];
+  effect();
+  
+  playChaosSound();
+}
+
+/* ========================= ANIMATION LOOP ========================= */
+function animate() {
+  drawTable();
+  requestAnimationFrame(animate);
+}
+
+/* ========================= INIT ========================= */
+updateHUD();
+animate();
+startRound(); 
+
+setInterval(() => {
+  if (Math.random() > 0.6) {
+    const q = botQuotes[Math.floor(Math.random() * botQuotes.length)];
+    spawnBubble(q, Math.random() > 0.5 ? W*0.15 : W*0.75, 180 + Math.random()*50);
+  }
+}, 6000);
+
+document.body.addEventListener('click', () => {
+  if (audioCtx.state === 'suspended') audioCtx.resume();
+}, { once: true });
+</script>
+</body>
+</html>
